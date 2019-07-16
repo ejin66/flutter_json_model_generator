@@ -5,6 +5,9 @@
 ## 依赖
 该项目是在quicktype基础上做的封装，使用python脚本来解析生成代码。有以下依赖：
 1. [quicktype](https://quicktype.io/)
+  ```bash
+  npm install -g quicktype
+  ```
 2. python3
 
 
