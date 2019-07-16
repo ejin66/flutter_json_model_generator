@@ -9,7 +9,7 @@
 
 
 ## 使用
-定义一个特殊的json, 内容如下：
+定义一个特殊的json: `type.json`, 内容如下：
 ```json
 //{"name": "Login", "page": "login.dart"}
 {
