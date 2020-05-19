@@ -4,10 +4,13 @@
 # 依赖：
 # 	1. quicktype
 #   2. type.json 模板
+# //keep
+# |
 
 import os
 import json
 import sys
+import re
 
 cachePageContent = {}
 cacheExistPageClasses = {}
@@ -21,101 +24,135 @@ import 'dart:convert';
 '''
 
 def parseContent(path):
-	tag = ""
-	block = ""
-	for line in open(path, 'r'):
-		line = line.strip()
-		if len(line) == 0 or line[0:2] == "//":
-			parseTagAndBlock(tag, block)
-			block = ""
-			tag = line
-		else:
-			block += line
+    tag = ""
+    block = ""
+    generateFileName = re.search(r'\/?([a-zA-Z]+)\.json$', path).group(1) + ".dart"
+    for line in open(path, 'r', encoding ='utf-8'):
+        line = line.strip()
+        if len(line) == 0 or line[0:2] == "//":
+            parseTagAndBlock(tag, block, generateFileName)
+            block = ""
+            tag = line
+        else:
+            block += line
 
-	if block:
-		parseTagAndBlock(tag, block)
+    if block:
+        parseTagAndBlock(tag, block, generateFileName)
 
-	saveToFile()
+    saveToFile()
 
 
 
-def parseTagAndBlock(tag, block):
-	if block == "":
-		return
+def parseTagAndBlock(tag, block, page):
+    if block == "":
+        return
 
-	if len(tag) == 0 or tag[0:2] != "//":
-		print("error data format: \n" + tag + block + "\n")
-		return
+    if len(tag) == 0 or tag[0:2] != "//":
+        print("error data format: \n" + tag + block + "\n")
+        return
 
-	jsonObject = json.loads(tag[2:])
-	name = jsonObject["name"]
-	page = jsonObject["page"]
+    jsonObject = json.loads(tag[2:])
+    name = jsonObject["name"]
 
-	if os.path.exists("./" + page) and page not in cacheExistPageClasses:
-		# print("Model [" + name + "] is not generated, cause file [" + page + "] already exists\n")
-		parseThePage(page)
+    if os.path.exists("./" + page) and page not in cacheExistPageClasses:
+        # print("Model [" + name + "] is not generated, cause file [" + page + "] already exists\n")
+        parseThePage(page)
 
-	if page in cacheExistPageClasses and name in cacheExistPageClasses[page] and cacheExistPageClasses[page][name].startswith("//keep") :
-		return
-		# print("edit mode: " + model)
-	else:
-		if isWindows():
-			model = os.popen("echo " + block + " | quicktype -l Dart --coders-in-class --top-level " + name).read()
-		else:
-			model = os.popen("echo '" + block + "' | quicktype -l Dart --coders-in-class --top-level " + name).read()
+    if page in cacheExistPageClasses and name in cacheExistPageClasses[page] and cacheExistPageClasses[page][name].startswith("//keep") :
+        return
+        # print("edit mode: " + model)
+    else:
+        if isWindows():
+            model = os.popen("echo " + block + " | quicktype -l Dart --coders-in-class --top-level " + name).read()
+        else:
+            model = os.popen("echo '" + block + "' | quicktype -l Dart --coders-in-class --top-level " + name).read()
 
-		importLib = "import 'dart:convert';"
-		index = model.find(importLib)
-		model = model[index + len(importLib):]
+        model = model.replace("].toDouble()", "]?.toDouble()")
+        importLib = "import 'dart:convert';"
+        index = model.find(importLib)
+        model = model[index + len(importLib):]
 
-	if page in cachePageContent:
-		cachePageContent[page] += model
-	else:
-		cachePageContent[page] = model
+    if page in cachePageContent:
+        cachePageContent[page] += model
+    else:
+        cachePageContent[page] = model
 
 def parseThePage(page):
-	className = ""
-	classContent = ""
-	if page not in cacheExistPageClasses:
-		cacheExistPageClasses[page] = {}
-	isStart = False
-	for line in open("./" + page, 'r'):
-		if line.startswith("class") or line.startswith("//"):
-			if not isStart:
-				isStart = True
-				classContent = line
-			else:
-				classContent += line
-			if line.startswith("class"):
-				className = line[6:-3]
-		elif line.startswith("}"):
-			classContent += line
-			cacheExistPageClasses[page][className] = classContent
-			isStart = False
-			# print("class: %s, content: %s" % (className, classContent))
-		else:
-			classContent += line
+    className = ""
+    classContent = ""
+    if page not in cacheExistPageClasses:
+        cacheExistPageClasses[page] = {}
+    isStart = False
+    for line in open("./" + page, 'r', encoding ='utf-8'):
+        if line.startswith("class") or line.startswith("enum") or line.startswith("//keep"):
+            if not isStart:
+                isStart = True
+                classContent = line
+            else:
+                classContent += line
+            if line.startswith("class"):
+                className = line[6:-3]
+            if line.startswith("enum"):
+                className = line[5:-3]
+        elif line.startswith("}"):
+            classContent += line
+            cacheExistPageClasses[page][className] = classContent
+            isStart = False
+            # print("class: %s, content: %s" % (className, cacheExistPageClasses[page][className]))
+        elif line.startswith("import"):
+            classContent += line
+            cacheExistPageClasses[page]["import"] = classContent
+            isStart = False
+        else:
+            classContent += line
 
 def saveToFile():
-	for key in cacheExistPageClasses.keys():
-		for key2 in cacheExistPageClasses[key].keys():
-			if cacheExistPageClasses[key][key2].startswith("//keep"):
-				cachePageContent[key] += "\n" + cacheExistPageClasses[key][key2]
+    for key in cacheExistPageClasses.keys():
+        for key2 in cacheExistPageClasses[key].keys():
+            if key2 == "import":
+                cachePageContent[key] = cacheExistPageClasses[key][key2] + cachePageContent[key]
+            elif cacheExistPageClasses[key][key2].startswith("//keep"):
+                cachePageContent[key] += "\n" + cacheExistPageClasses[key][key2]
 
-	for key in cachePageContent.keys():
-		content = generateHeader + cachePageContent[key]
-		tmpFile = open(key, mode="w+")
-		tmpFile.write(content)
-		tmpFile.flush()
-		tmpFile.close()
+    for key in cachePageContent.keys():
+        content = cachePageContent[key]
+        if generateHeader not in content:
+            content = generateHeader + content
+
+        # 如果key是 a|b 的形式，代表将a(原始)转成b(生成model的key)
+        pattern = re.compile(r'[a-zA-Z0-9]+\|[a-zA-Z0-9]+')
+        result = pattern.findall(content)
+
+        for item in result:
+            ss = item.split("|")
+            rawName = ss[0]
+            newName = ss[1]
+            createdName = ss[0] + ss[1][:1].capitalize() + ss[1][1:]
+            if newName.endswith("s"):
+                createdSubClassName = ss[0][:1].capitalize() + ss[0][1:] + ss[1][:1].capitalize() + ss[1][1:-1]
+                subClassName = ss[1][:1].capitalize() + ss[1][1:-1]
+            else:
+                createdSubClassName = ss[0][:1].capitalize() + ss[0][1:] + ss[1][:1].capitalize() + ss[1][1:]
+                subClassName = ss[1][:1].capitalize() + ss[1][1:] + "Item"
+
+            # print("item: %s, createdName: %s, createdSubClassName: %s" % (item, createdName, createdSubClassName))
+            content = content.replace(item, rawName)
+            content = content.replace(createdName, newName)
+            content = content.replace(createdSubClassName, subClassName)
+
+        tmpFile = open(key, mode="w+", encoding ='utf-8')
+        tmpFile.write(content)
+        tmpFile.flush()
+        tmpFile.close()
 
 def isWindows():
-	return sys.platform.startswith("win")
+    return sys.platform.startswith("win")
 
 def start():
-	file = "./type.json"
-	if len(sys.argv) > 1:
-		file = sys.argv[1]
-	parseContent(file)
+    file = "./type.json"
+    if len(sys.argv) > 1:
+        file = sys.argv[1]
+
+    parseContent(file)
 
 start()
