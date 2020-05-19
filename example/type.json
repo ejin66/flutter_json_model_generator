@@ -1,16 +1,4 @@
-//{"name": "Login", "page": "login.dart"}
-{
-  "account": "",
-  "pwd": ""
-}
-
-//{"name": "LoginResp", "page": "login.dart"}
-{
-  "code": 0,
-  "msg": ""
-}
-
-//{"name": "Test", "page": "test.dart"}
+//{"name": "Test"}
 {
   "test": ""
 }
